@@ -83,7 +83,7 @@ ALTER TABLE public.accounts OWNER TO postgres;
 
 CREATE TABLE public.checking_accounts (
     account_id uuid NOT NULL,
-    overdraft_limit bigint NOT NULL,
+    overdraft_limit numeric NOT NULL,
     maintenance_fee bigint NOT NULL
 );
 
@@ -97,12 +97,24 @@ ALTER TABLE public.checking_accounts OWNER TO postgres;
 CREATE TABLE public.savings_accounts (
     account_id uuid NOT NULL,
     interest_rate numeric NOT NULL,
-    min_balance bigint DEFAULT 100 NOT NULL,
-    withdrawal_limit bigint DEFAULT 100000 NOT NULL
+    min_balance bigint NOT NULL,
+    withdrawal_limit bigint NOT NULL
 );
 
 
 ALTER TABLE public.savings_accounts OWNER TO postgres;
+
+--
+-- Name: sessions; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.sessions (
+    id text DEFAULT uuidv7() NOT NULL,
+    fk_user_id uuid NOT NULL
+);
+
+
+ALTER TABLE public.sessions OWNER TO postgres;
 
 --
 -- Name: transactions; Type: TABLE; Schema: public; Owner: postgres
@@ -173,6 +185,14 @@ ALTER TABLE ONLY public.savings_accounts
 
 
 --
+-- Name: sessions sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sessions
+    ADD CONSTRAINT sessions_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: transactions transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -229,11 +249,19 @@ ALTER TABLE ONLY public.savings_accounts
 
 
 --
+-- Name: sessions sessions_fk_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sessions
+    ADD CONSTRAINT sessions_fk_user_id_fkey FOREIGN KEY (fk_user_id) REFERENCES public.users(id);
+
+
+--
 -- Name: transactions transactions_fk_recipient_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.transactions
-    ADD CONSTRAINT transactions_fk_recipient_fkey FOREIGN KEY (fk_recipient) REFERENCES public.users(id);
+    ADD CONSTRAINT transactions_fk_recipient_fkey FOREIGN KEY (fk_recipient) REFERENCES public.accounts(id);
 
 
 --
@@ -241,7 +269,7 @@ ALTER TABLE ONLY public.transactions
 --
 
 ALTER TABLE ONLY public.transactions
-    ADD CONSTRAINT transactions_fk_sender_fkey FOREIGN KEY (fk_sender) REFERENCES public.users(id);
+    ADD CONSTRAINT transactions_fk_sender_fkey FOREIGN KEY (fk_sender) REFERENCES public.accounts(id);
 
 
 --

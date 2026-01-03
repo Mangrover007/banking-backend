@@ -7,39 +7,45 @@ package repository
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
-const createUser = `-- name: CreateUser :one
-INSERT INTO users (first_name, last_name, email, phone_number, address, password)
+const createSession = `-- name: CreateSession :one
+INSERT INTO sessions (fk_user_id)
 VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    $6
+    fk_user_id = $1
 )
-RETURNING id, first_name, last_name, email, phone_number, address, password, created_at, updated_at
+RETURNING id
 `
 
-type CreateUserParams struct {
-	FirstName   string
-	LastName    string
-	Email       string
-	PhoneNumber string
-	Address     string
-	Password    string
+func (q *Queries) CreateSession(ctx context.Context, fkUserID uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, createSession, fkUserID)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser,
-		arg.FirstName,
-		arg.LastName,
-		arg.Email,
-		arg.PhoneNumber,
-		arg.Address,
-		arg.Password,
-	)
+const deleteSession = `-- name: DeleteSession :execrows
+DELETE FROM sessions
+WHERE id = $1
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSession, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const findUserByPhone = `-- name: FindUserByPhone :one
+SELECT id, first_name, last_name, email, phone_number, address, password, created_at, updated_at FROM users
+WHERE phone_number = $1
+`
+
+func (q *Queries) FindUserByPhone(ctx context.Context, phoneNumber string) (User, error) {
+	row := q.db.QueryRow(ctx, findUserByPhone, phoneNumber)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -55,47 +61,64 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const findAllUsers = `-- name: FindAllUsers :many
+const findUserByPhoneOrEmail = `-- name: FindUserByPhoneOrEmail :one
 SELECT id, first_name, last_name, email, phone_number, address, password, created_at, updated_at FROM users
+WHERE phone_number = $1 OR email = $2
 `
 
-func (q *Queries) FindAllUsers(ctx context.Context) ([]User, error) {
-	rows, err := q.db.Query(ctx, findAllUsers)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []User
-	for rows.Next() {
-		var i User
-		if err := rows.Scan(
-			&i.ID,
-			&i.FirstName,
-			&i.LastName,
-			&i.Email,
-			&i.PhoneNumber,
-			&i.Address,
-			&i.Password,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type FindUserByPhoneOrEmailParams struct {
+	PhoneNumber string
+	Email       string
 }
 
-const findUserByPhone = `-- name: FindUserByPhone :one
-SELECT id, first_name, last_name, email, phone_number, address, password, created_at, updated_at FROM users
-WHERE phone_number = $1
+func (q *Queries) FindUserByPhoneOrEmail(ctx context.Context, arg FindUserByPhoneOrEmailParams) (User, error) {
+	row := q.db.QueryRow(ctx, findUserByPhoneOrEmail, arg.PhoneNumber, arg.Email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.Email,
+		&i.PhoneNumber,
+		&i.Address,
+		&i.Password,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const registerUser = `-- name: RegisterUser :one
+INSERT INTO users (first_name, last_name, email, phone_number, address, password)
+VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6
+)
+RETURNING id, first_name, last_name, email, phone_number, address, password, created_at, updated_at
 `
 
-func (q *Queries) FindUserByPhone(ctx context.Context, phoneNumber string) (User, error) {
-	row := q.db.QueryRow(ctx, findUserByPhone, phoneNumber)
+type RegisterUserParams struct {
+	FirstName   string
+	LastName    string
+	Email       string
+	PhoneNumber string
+	Address     string
+	Password    string
+}
+
+func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, registerUser,
+		arg.FirstName,
+		arg.LastName,
+		arg.Email,
+		arg.PhoneNumber,
+		arg.Address,
+		arg.Password,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,

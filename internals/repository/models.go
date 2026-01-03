@@ -153,7 +153,7 @@ type Account struct {
 
 type CheckingAccount struct {
 	AccountID      uuid.UUID
-	OverdraftLimit int64
+	OverdraftLimit pgtype.Numeric
 	MaintenanceFee int64
 }
 
@@ -162,6 +162,11 @@ type SavingsAccount struct {
 	InterestRate    pgtype.Numeric
 	MinBalance      int64
 	WithdrawalLimit int64
+}
+
+type Session struct {
+	ID       string
+	FkUserID uuid.UUID
 }
 
 type Transaction struct {

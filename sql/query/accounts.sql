@@ -8,7 +8,7 @@ VALUES (
 )
 RETURNING * ;
 
--- name: CreateSavingsAccount :one
+-- name: OpenSavingsAccount :one
 INSERT INTO savings_accounts (account_id, interest_rate, min_balance, withdrawal_limit)
 VALUES (
     sqlc.arg(account_id),
@@ -18,7 +18,7 @@ VALUES (
 )
 RETURNING * ;
 
--- name: CreateCheckingAccount :one
+-- name: OpenCheckingAccount :one
 INSERT INTO checking_accounts (account_id, overdraft_limit, maintenance_fee)
 VALUES (
     sqlc.arg(account_id),

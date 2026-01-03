@@ -12,64 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createCheckingAccount = `-- name: CreateCheckingAccount :one
-INSERT INTO checking_accounts (account_id, overdraft_limit, maintenance_fee)
-VALUES (
-    $1,
-    $2,
-    $3
-)
-RETURNING account_id, overdraft_limit, maintenance_fee
-`
-
-type CreateCheckingAccountParams struct {
-	AccountID      uuid.UUID
-	OverdraftLimit int64
-	MaintenanceFee int64
-}
-
-func (q *Queries) CreateCheckingAccount(ctx context.Context, arg CreateCheckingAccountParams) (CheckingAccount, error) {
-	row := q.db.QueryRow(ctx, createCheckingAccount, arg.AccountID, arg.OverdraftLimit, arg.MaintenanceFee)
-	var i CheckingAccount
-	err := row.Scan(&i.AccountID, &i.OverdraftLimit, &i.MaintenanceFee)
-	return i, err
-}
-
-const createSavingsAccount = `-- name: CreateSavingsAccount :one
-INSERT INTO savings_accounts (account_id, interest_rate, min_balance, withdrawal_limit)
-VALUES (
-    $1,
-    $2,
-    $3,
-    $4
-)
-RETURNING account_id, interest_rate, min_balance, withdrawal_limit
-`
-
-type CreateSavingsAccountParams struct {
-	AccountID       uuid.UUID
-	InterestRate    pgtype.Numeric
-	MinBalance      int64
-	WithdrawalLimit int64
-}
-
-func (q *Queries) CreateSavingsAccount(ctx context.Context, arg CreateSavingsAccountParams) (SavingsAccount, error) {
-	row := q.db.QueryRow(ctx, createSavingsAccount,
-		arg.AccountID,
-		arg.InterestRate,
-		arg.MinBalance,
-		arg.WithdrawalLimit,
-	)
-	var i SavingsAccount
-	err := row.Scan(
-		&i.AccountID,
-		&i.InterestRate,
-		&i.MinBalance,
-		&i.WithdrawalLimit,
-	)
-	return i, err
-}
-
 const findAccount = `-- name: FindAccount :one
 SELECT id, account_number, balance, type, fk_user_id, created_at, updated_at FROM accounts
 WHERE
@@ -145,6 +87,64 @@ func (q *Queries) OpenAccount(ctx context.Context, arg OpenAccountParams) (Accou
 		&i.FkUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const openCheckingAccount = `-- name: OpenCheckingAccount :one
+INSERT INTO checking_accounts (account_id, overdraft_limit, maintenance_fee)
+VALUES (
+    $1,
+    $2,
+    $3
+)
+RETURNING account_id, overdraft_limit, maintenance_fee
+`
+
+type OpenCheckingAccountParams struct {
+	AccountID      uuid.UUID
+	OverdraftLimit pgtype.Numeric
+	MaintenanceFee int64
+}
+
+func (q *Queries) OpenCheckingAccount(ctx context.Context, arg OpenCheckingAccountParams) (CheckingAccount, error) {
+	row := q.db.QueryRow(ctx, openCheckingAccount, arg.AccountID, arg.OverdraftLimit, arg.MaintenanceFee)
+	var i CheckingAccount
+	err := row.Scan(&i.AccountID, &i.OverdraftLimit, &i.MaintenanceFee)
+	return i, err
+}
+
+const openSavingsAccount = `-- name: OpenSavingsAccount :one
+INSERT INTO savings_accounts (account_id, interest_rate, min_balance, withdrawal_limit)
+VALUES (
+    $1,
+    $2,
+    $3,
+    $4
+)
+RETURNING account_id, interest_rate, min_balance, withdrawal_limit
+`
+
+type OpenSavingsAccountParams struct {
+	AccountID       uuid.UUID
+	InterestRate    pgtype.Numeric
+	MinBalance      int64
+	WithdrawalLimit int64
+}
+
+func (q *Queries) OpenSavingsAccount(ctx context.Context, arg OpenSavingsAccountParams) (SavingsAccount, error) {
+	row := q.db.QueryRow(ctx, openSavingsAccount,
+		arg.AccountID,
+		arg.InterestRate,
+		arg.MinBalance,
+		arg.WithdrawalLimit,
+	)
+	var i SavingsAccount
+	err := row.Scan(
+		&i.AccountID,
+		&i.InterestRate,
+		&i.MinBalance,
+		&i.WithdrawalLimit,
 	)
 	return i, err
 }
