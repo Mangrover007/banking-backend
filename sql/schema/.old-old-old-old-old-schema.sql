@@ -109,7 +109,7 @@ ALTER TABLE public.savings_accounts OWNER TO postgres;
 --
 
 CREATE TABLE public.sessions (
-    id uuid DEFAULT uuidv7() NOT NULL,
+    id text DEFAULT uuidv7() NOT NULL,
     fk_user_id uuid NOT NULL
 );
 

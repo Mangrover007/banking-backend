@@ -12,12 +12,14 @@ import (
 	"github.com/Mangrover007/banking-backend/internals/repository"
 )
 
-type Bank interface {
+type BankService interface {
 	Deposit(ctx context.Context, account repository.Account, amount int64) error
 	Withdraw(ctx context.Context, account repository.Account, amount int64) error
 	Transfer(ctx context.Context, sender, recipient repository.Account, amount int64) error
 	OpenSavingsAccount(ctx context.Context, user repository.User, balance int64, _type repository.AccountType) (repository.Account, error)
 	OpenCheckingAccount(ctx context.Context, user repository.User, balance int64, _type repository.AccountType) (repository.Account, error)
+	FindAccountByID(ctx context.Context, accountID uuid.UUID) (repository.Account, error)
+	FindAccount(ctx context.Context, userID uuid.UUID, _type repository.AccountType) (repository.Account, error)
 }
 
 type bank struct {
@@ -29,7 +31,7 @@ var (
 	ErrRowsCorruption = errors.New("More than 1 or no rows were affected during the transaction. Rolling back.")
 )
 
-func NewBank(conn *pgx.Conn) Bank {
+func NewBank(conn *pgx.Conn) BankService {
 	return &bank{
 		conn:  conn,
 		query: repository.New(conn),
@@ -47,31 +49,41 @@ func (b *bank) Deposit(ctx context.Context, account repository.Account, amount i
 		return err
 	}
 
-	tx, err := b.conn.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.Serializable,
-		AccessMode: pgx.ReadWrite,
-	})
-	if err != nil {
+	err = func() error {
+		tx, err := b.conn.BeginTx(ctx, pgx.TxOptions{
+			IsoLevel:   pgx.Serializable,
+			AccessMode: pgx.ReadWrite,
+		})
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+
+		qtx := b.query.WithTx(tx)
+
+		// attempt deposit
+		rowsAff, err := b.depositWrapper(ctx, qtx, amount, account.ID)
+		if err != nil {
+			tx.Rollback(ctx) // paranoia rollback
+			return err
+		}
+		if rowsAff != 1 {
+			tx.Rollback(ctx)         // another paranoia rollback
+			return ErrRowsCorruption // how does returning this error help
+		}
+
+		// if commit fails, then no changes were made duh!
+		err = tx.Commit(ctx)
 		return err
-	}
-	defer tx.Rollback(ctx)
+	}()
 
-	qtx := b.query.WithTx(tx)
-
-	// attempt deposit
-	rowsAff, err := b.depositWrapper(ctx, qtx, amount, account.ID)
 	if err != nil {
 		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusFAILED)
-		tx.Rollback(ctx)
-		return err
-	}
-	if rowsAff != 1 {
-		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusFAILED)
-		tx.Rollback(ctx)
-		return ErrRowsCorruption
+	} else {
+		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusSUCCESS)
 	}
 
-	return tx.Commit(ctx)
+	return err
 }
 
 func (b *bank) Withdraw(ctx context.Context, account repository.Account, amount int64) error {
@@ -85,33 +97,39 @@ func (b *bank) Withdraw(ctx context.Context, account repository.Account, amount 
 		return err
 	}
 
-	tx, err := b.conn.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.Serializable,
-		AccessMode: pgx.ReadWrite,
-	})
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
+	err = func() error {
+		tx, err := b.conn.BeginTx(ctx, pgx.TxOptions{
+			IsoLevel:   pgx.Serializable,
+			AccessMode: pgx.ReadWrite,
+		})
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
 
-	qtx := b.query.WithTx(tx)
+		qtx := b.query.WithTx(tx)
 
-	// try withdraw
-	rowsAff, err := b.withdrawWrapper(ctx, qtx, amount, account.ID)
+		// try withdraw
+		rowsAff, err := b.withdrawWrapper(ctx, qtx, amount, account.ID)
+		if err != nil {
+			tx.Rollback(ctx)
+			return err
+		}
+		if rowsAff != 1 {
+			tx.Rollback(ctx)
+			return ErrRowsCorruption
+		}
+
+		return tx.Commit(ctx)
+	}()
+
 	if err != nil {
 		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusFAILED)
-		tx.Rollback(ctx)
-		return err
-	}
-	if rowsAff != 1 {
-		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusFAILED)
-		tx.Rollback(ctx)
-		return ErrRowsCorruption
+	} else {
+		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusSUCCESS)
 	}
 
-	b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusSUCCESS)
-
-	return tx.Commit(ctx)
+	return err
 }
 
 func (b *bank) Transfer(ctx context.Context, sender, recipient repository.Account, amount int64) error {
@@ -125,48 +143,52 @@ func (b *bank) Transfer(ctx context.Context, sender, recipient repository.Accoun
 		return err
 	}
 
-	tx, err := b.conn.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.Serializable,
-		AccessMode: pgx.ReadWrite,
-	})
+	err = func() error {
+		tx, err := b.conn.BeginTx(ctx, pgx.TxOptions{
+			IsoLevel:   pgx.Serializable,
+			AccessMode: pgx.ReadWrite,
+		})
+		if err != nil {
+			return err
+		}
+
+		qtx := b.query.WithTx(tx)
+
+		// lock accounts in the same order
+		// otherwise may deadlock
+		b.lockAccountsForTransfer(ctx, qtx, sender, recipient)
+
+		// attempt transfer
+		rowsAff, err := b.withdrawWrapper(ctx, qtx, amount, sender.ID)
+		if err != nil {
+			tx.Rollback(ctx)
+			return err
+		}
+		if rowsAff != 1 {
+			tx.Rollback(ctx)
+			return ErrRowsCorruption
+		}
+
+		rowsAff, err = b.depositWrapper(ctx, qtx, amount, recipient.ID)
+		if err != nil {
+			tx.Rollback(ctx)
+			return err
+		}
+		if rowsAff != 1 {
+			tx.Rollback(ctx)
+			return ErrRowsCorruption
+		}
+
+		return tx.Commit(ctx)
+	}()
+
 	if err != nil {
-		return err
-	}
-
-	qtx := b.query.WithTx(tx)
-
-	// lock accounts in the same order
-	// otherwise may deadlock
-	b.lockAccountsForTransfer(ctx, qtx, sender, recipient)
-
-	// attempt transfer
-	rowsAff, err := b.withdrawWrapper(ctx, qtx, amount, sender.ID)
-	if err != nil {
 		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusFAILED)
-		tx.Rollback(ctx)
-		return err
-	}
-	if rowsAff != 1 {
-		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusFAILED)
-		tx.Rollback(ctx)
-		return ErrRowsCorruption
+	} else {
+		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusSUCCESS)
 	}
 
-	rowsAff, err = b.depositWrapper(ctx, qtx, amount, recipient.ID)
-	if err != nil {
-		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusFAILED)
-		tx.Rollback(ctx)
-		return err
-	}
-	if rowsAff != 1 {
-		b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusFAILED)
-		tx.Rollback(ctx)
-		return ErrRowsCorruption
-	}
-
-	b.updateTransactionWrapper(ctx, trans.ID, repository.TransactionStatusSUCCESS)
-
-	return tx.Commit(ctx)
+	return err
 }
 
 func (b *bank) OpenSavingsAccount(ctx context.Context, user repository.User, balance int64, _type repository.AccountType) (repository.Account, error) {
@@ -286,4 +308,23 @@ func (b *bank) lockAccountsForTransfer(ctx context.Context, qtx *repository.Quer
 		}
 	}
 	return nil
+}
+
+func (b *bank) FindAccount(ctx context.Context, userID uuid.UUID, _type repository.AccountType) (repository.Account, error) {
+	account, err := b.query.FindAccount(ctx, repository.FindAccountParams{
+		FkUserID: userID,
+		Type:     _type,
+	})
+	if err != nil {
+		return repository.Account{}, err
+	}
+
+	return account, nil
+}
+func (b *bank) FindAccountByID(ctx context.Context, accountID uuid.UUID) (repository.Account, error) {
+	account, err := b.query.FindAccountByID(ctx, accountID)
+	if err != nil {
+		return repository.Account{}, err
+	}
+	return account, nil
 }

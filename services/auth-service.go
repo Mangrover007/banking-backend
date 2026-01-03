@@ -5,13 +5,14 @@ import (
 	"errors"
 
 	"github.com/Mangrover007/banking-backend/internals/repository"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 type AuthService interface {
 	Register(ctx context.Context, user repository.RegisterUserParams) (repository.User, error)
-	Login(ctx context.Context, phone, email, password string) (string, error)
-	Logout(ctx context.Context, sid string) error
+	Login(ctx context.Context, phone, email, password string) (uuid.UUID, error)
+	Logout(ctx context.Context, sid uuid.UUID) error
 }
 
 var (
@@ -33,10 +34,15 @@ func NewAuthService(query *repository.Queries) AuthService {
 func (s *service) Register(ctx context.Context, user repository.RegisterUserParams) (repository.User, error) {
 	// is phone number already registered
 	_, err := s.query.FindUserByPhone(ctx, user.PhoneNumber)
+	if err == nil {
+		// meaning phone number is found, aka already registered
+		return repository.User{}, ErrPhoneIsRegistered
+	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return repository.User{}, ErrPhoneIsRegistered
 	}
-	// successfully register user
+
+	// register user
 	newUser, err := s.query.RegisterUser(ctx, user)
 	if err != nil {
 		return repository.User{}, err
@@ -45,7 +51,7 @@ func (s *service) Register(ctx context.Context, user repository.RegisterUserPara
 	return newUser, nil
 }
 
-func (s *service) Login(ctx context.Context, phone, email, password string) (string, error) {
+func (s *service) Login(ctx context.Context, phone, email, password string) (uuid.UUID, error) {
 	// does user exist
 	found, err := s.query.FindUserByPhoneOrEmail(ctx, repository.FindUserByPhoneOrEmailParams{
 		PhoneNumber: phone,
@@ -53,26 +59,25 @@ func (s *service) Login(ctx context.Context, phone, email, password string) (str
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", ErrUserNotFound
+			return uuid.UUID{}, ErrUserNotFound
 		}
-		return "", err
+		return uuid.UUID{}, err
 	}
 
 	// is user password correct
 	if password != found.Password {
-		return "", ErrInvalidCredentials
+		return uuid.UUID{}, ErrInvalidCredentials
 	}
 
 	// login user
 	sessionID, err := s.query.CreateSession(ctx, found.ID)
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
-
 	return sessionID, nil
 }
 
-func (s *service) Logout(ctx context.Context, sid string) error {
+func (s *service) Logout(ctx context.Context, sid uuid.UUID) error {
 	// find and delete session
 	_, err := s.query.DeleteSession(ctx, sid)
 	if err != nil {

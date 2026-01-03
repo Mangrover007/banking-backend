@@ -33,6 +33,10 @@ WHERE
     fk_user_id = $1 AND
     type = $2 ;
 
+-- name: FindAccountByID :one
+SELECT * FROM accounts
+WHERE id = $1 ;
+
 -- name: UpdateBalanceDeposit :execrows
 UPDATE accounts
 SET

@@ -19,9 +19,9 @@ VALUES (
 RETURNING id
 `
 
-func (q *Queries) CreateSession(ctx context.Context, fkUserID uuid.UUID) (string, error) {
+func (q *Queries) CreateSession(ctx context.Context, fkUserID uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createSession, fkUserID)
-	var id string
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -31,7 +31,7 @@ DELETE FROM sessions
 WHERE id = $1
 `
 
-func (q *Queries) DeleteSession(ctx context.Context, id string) (int64, error) {
+func (q *Queries) DeleteSession(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteSession, id)
 	if err != nil {
 		return 0, err

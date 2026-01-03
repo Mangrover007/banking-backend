@@ -165,7 +165,7 @@ type SavingsAccount struct {
 }
 
 type Session struct {
-	ID       string
+	ID       uuid.UUID
 	FkUserID uuid.UUID
 }
 

@@ -39,6 +39,26 @@ func (q *Queries) FindAccount(ctx context.Context, arg FindAccountParams) (Accou
 	return i, err
 }
 
+const findAccountByID = `-- name: FindAccountByID :one
+SELECT id, account_number, balance, type, fk_user_id, created_at, updated_at FROM accounts
+WHERE id = $1
+`
+
+func (q *Queries) FindAccountByID(ctx context.Context, id uuid.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, findAccountByID, id)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.AccountNumber,
+		&i.Balance,
+		&i.Type,
+		&i.FkUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const lockTransferAccount = `-- name: LockTransferAccount :execrows
 SELECT id, account_number, balance, type, fk_user_id, created_at, updated_at FROM accounts
 WHERE id = $1
