@@ -31,16 +31,16 @@ func NewAuthController(service services.AuthService) AuthController {
 type User struct {
 	FirstName   string `json:"first_name" binding:"required"`
 	LastName    string `json:"last_name" binding:"required"`
-	Email       string `json:"email" binding:"required"`
+	Email       string `json:"email" binding:"required,email"`
 	PhoneNumber string `json:"phone_number" binding:"required"`
 	Address     string `json:"address" binding:"required"`
 	Password    string `json:"password" binding:"required"`
 }
 
 type Login struct {
-	Email       string `json:"email" binding:"required_without=phone_number,email"`
+	Email       string `json:"email" binding:"required_without=PhoneNumber,email"`
 	Password    string `json:"password" binding:"required"`
-	PhoneNumber string `json:"phone_number" binding:"required_without=email"` // add custom validator for phone number?
+	PhoneNumber string `json:"phone_number" binding:"required_without=Email"` // add custom validator for phone number?
 }
 
 func (c *authController) Register(ctx *gin.Context) {
@@ -102,26 +102,8 @@ func (c *authController) Login(ctx *gin.Context) {
 		return
 	}
 
-	// hash pasword
-	password := body.Password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 15)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	err = bcrypt.CompareHashAndPassword(hashedPassword, []byte(password))
-	if err != nil {
-		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
 	// login in db
-	sid, err := c.s.Login(ctx, body.PhoneNumber, body.Email, password)
+	sid, err := c.s.Login(ctx, body.PhoneNumber, body.Email, body.Password)
 	if err != nil {
 		if errors.Is(err, services.ErrUserNotFound) {
 			ctx.JSON(http.StatusNotFound, gin.H{
@@ -147,7 +129,7 @@ func (c *authController) Login(ctx *gin.Context) {
 	cookie := http.Cookie{
 		Name:     "sid",
 		Value:    sid.String(),
-		Path:     "/trans",
+		Path:     "/",
 		Expires:  time.Now().Add(time.Minute * 30),
 		HttpOnly: true,
 	}
@@ -156,8 +138,8 @@ func (c *authController) Login(ctx *gin.Context) {
 }
 
 func (c *authController) Logout(ctx *gin.Context) {
-	sidstr, ok := ctx.Params.Get("sid")
-	if !ok {
+	sidstr, err := ctx.Cookie("sid")
+	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
 			"error": "no session id",
 		})

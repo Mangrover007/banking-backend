@@ -1,7 +1,6 @@
 -- name: OpenAccount :one
-INSERT INTO accounts (account_number, balance, type, fk_user_id)
+INSERT INTO accounts (balance, type, fk_user_id)
 VALUES (
-    sqlc.arg(account_number),
     sqlc.arg(balance),
     sqlc.arg(type),
     sqlc.arg(fk_user_id)
@@ -35,24 +34,24 @@ WHERE
 
 -- name: FindAccountByID :one
 SELECT * FROM accounts
-WHERE id = $1 ;
+WHERE account_number = $1 ;
 
 -- name: UpdateBalanceDeposit :execrows
 UPDATE accounts
 SET
     balance = balance + $2,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 ;
+WHERE account_number = $1 ;
 
 -- name: UpdateBalanceWithdraw :execrows
 UPDATE accounts
 SET
     balance = balance - $2,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND balance >= $2 ;
+WHERE account_number = $1 AND balance >= $2 ;
 
 -- name: LockTransferAccount :execrows
 SELECT * FROM accounts
-WHERE id = $1
+WHERE account_number = $1
 FOR UPDATE ;
 

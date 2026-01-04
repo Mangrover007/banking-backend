@@ -8,24 +8,27 @@ VALUES (
     sqlc.arg(address),
     sqlc.arg(password)
 )
-RETURNING *;
+RETURNING * ;
 
 -- name: FindUserByPhone :one
-SELECT * FROM users
-WHERE phone_number = $1;
+SELECT * FROM users WHERE phone_number = $1 ;
 
 -- name: FindUserByPhoneOrEmail :one
 SELECT * FROM users
-WHERE phone_number = $1 OR email = $2;
+WHERE phone_number = $1 OR email = $2 ;
 
 -- name: CreateSession :one
 INSERT INTO sessions (fk_user_id)
 VALUES (
-    fk_user_id = $1
+    $1
 )
-RETURNING id;
+RETURNING id ;
 
 -- name: DeleteSession :execrows
-DELETE FROM sessions
-WHERE id = $1;
+DELETE FROM sessions WHERE id = $1 ;
 
+-- name: FindSession :one
+SELECT * FROM sessions WHERE id = $1 ;
+
+-- name: FindUserByID :one
+SELECT * FROM users WHERE id = $1 ;

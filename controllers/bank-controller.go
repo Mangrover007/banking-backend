@@ -83,19 +83,25 @@ func (c *controller) Deposit(ctx *gin.Context) {
 	var body reqDepositOrWithdraw
 	err := ctx.ShouldBindJSON(&body)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, nil)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	account, err := c.s.FindAccount(ctx, user.ID, AccTypeToRepoAccType[body.Type])
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, nil)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	err = c.s.Deposit(ctx, account, body.Amount)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, nil)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
@@ -107,19 +113,25 @@ func (c *controller) Withdraw(ctx *gin.Context) {
 	var body reqDepositOrWithdraw
 	err := ctx.ShouldBindJSON(&body)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, nil)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	account, err := c.s.FindAccount(ctx, user.ID, AccTypeToRepoAccType[body.Type])
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, nil)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	err = c.s.Withdraw(ctx, account, body.Amount)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, nil)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
@@ -130,27 +142,35 @@ func (c *controller) Transfer(ctx *gin.Context) {
 	var body reqTransfer
 	err := ctx.ShouldBindJSON(&body)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, nil)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	senderID, err := uuid.Parse(body.Sender)
 	sender, err := c.s.FindAccountByID(ctx, senderID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, nil)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	recipientID, err := uuid.Parse(body.Recipient)
 	recipient, err := c.s.FindAccountByID(ctx, recipientID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, nil)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	err = c.s.Transfer(ctx, sender, recipient, body.Amount)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, nil)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
@@ -162,19 +182,25 @@ func (c *controller) OpenSavingsAccount(ctx *gin.Context) {
 	var body reqOpenAccount
 	err := ctx.ShouldBindJSON(&body)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, nil)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	_type, _ := AccTypeToRepoAccType[body.Type]
 	if _type != repository.AccountTypeSAVINGS {
-		ctx.JSON(http.StatusBadRequest, nil) // asshole tried to send diff account type to diff endpoint
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "you are asshole",
+		}) // asshole tried to send diff account type to diff endpoint
 		return
 	}
 
 	account, err := c.s.OpenSavingsAccount(ctx, user, body.Balance, _type)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, nil)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
@@ -186,19 +212,25 @@ func (c *controller) OpenCheckingAccount(ctx *gin.Context) {
 	var body reqOpenAccount
 	err := ctx.ShouldBindJSON(&body)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, nil)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	_type, _ := AccTypeToRepoAccType[body.Type]
 	if _type != repository.AccountTypeCHECKING {
-		ctx.JSON(http.StatusBadRequest, nil) // asshole tried to send diff account type to diff endpoint
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "you are indeed an asshole",
+		}) // asshole tried to send diff account type to diff endpoint
 		return
 	}
 
 	account, err := c.s.OpenCheckingAccount(ctx, user, body.Balance, _type)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, nil)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 

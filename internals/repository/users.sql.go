@@ -14,7 +14,7 @@ import (
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (fk_user_id)
 VALUES (
-    fk_user_id = $1
+    $1
 )
 RETURNING id
 `
@@ -27,8 +27,7 @@ func (q *Queries) CreateSession(ctx context.Context, fkUserID uuid.UUID) (uuid.U
 }
 
 const deleteSession = `-- name: DeleteSession :execrows
-DELETE FROM sessions
-WHERE id = $1
+DELETE FROM sessions WHERE id = $1
 `
 
 func (q *Queries) DeleteSession(ctx context.Context, id uuid.UUID) (int64, error) {
@@ -39,9 +38,40 @@ func (q *Queries) DeleteSession(ctx context.Context, id uuid.UUID) (int64, error
 	return result.RowsAffected(), nil
 }
 
+const findSession = `-- name: FindSession :one
+SELECT id, fk_user_id FROM sessions WHERE id = $1
+`
+
+func (q *Queries) FindSession(ctx context.Context, id uuid.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, findSession, id)
+	var i Session
+	err := row.Scan(&i.ID, &i.FkUserID)
+	return i, err
+}
+
+const findUserByID = `-- name: FindUserByID :one
+SELECT id, first_name, last_name, email, phone_number, address, password, created_at, updated_at FROM users WHERE id = $1
+`
+
+func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, findUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.Email,
+		&i.PhoneNumber,
+		&i.Address,
+		&i.Password,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const findUserByPhone = `-- name: FindUserByPhone :one
-SELECT id, first_name, last_name, email, phone_number, address, password, created_at, updated_at FROM users
-WHERE phone_number = $1
+SELECT id, first_name, last_name, email, phone_number, address, password, created_at, updated_at FROM users WHERE phone_number = $1
 `
 
 func (q *Queries) FindUserByPhone(ctx context.Context, phoneNumber string) (User, error) {

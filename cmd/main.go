@@ -1,34 +1,36 @@
 package main
 
 import (
-	"github.com/Mangrover007/banking-backend/cmd/controllers"
-	"github.com/Mangrover007/banking-backend/cmd/entities"
-	"github.com/Mangrover007/banking-backend/cmd/services"
+	"context"
+	"os"
+	"time"
+
+	"github.com/Mangrover007/banking-backend/internals/repository"
+	"github.com/Mangrover007/banking-backend/routers"
 	"github.com/gin-gonic/gin"
-)
-
-var (
-	videoService services.VideoService       = services.New()
-	controller   controllers.VideoController = controllers.New(videoService)
-)
-
-var (
-	registeredDB = make(map[string]entities.User)
-	activeUsers  = make(map[string]string)
-)
-
-var (
-	authService services.AuthService       = services.NewAuthService(registeredDB, activeUsers)
-	_           controllers.AuthController = controllers.NewAuthController(authService)
+	"github.com/jackc/pgx/v5"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	server := gin.New()
+	godotenv.Load()
+	var DB_URI = os.Getenv("DATABASE_URI")
+	if DB_URI == "" {
+		panic("no DB URI in env variables")
+	}
 
+	server := gin.New()
 	server.Use(gin.Logger(), gin.Recovery())
 
-	server.GET("/videos", controller.FindAll)
-	server.POST("videos", controller.Save)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*10)
+	conn, _ := pgx.Connect(ctx, DB_URI)
+	query := repository.New(conn)
+
+	defer conn.Close(ctx)
+	defer cancelFunc()
+
+	routers.AuthRouter(server, query)
+	routers.BankRouter(server, query, conn)
 
 	server.Run(":8080")
 }

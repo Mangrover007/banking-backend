@@ -142,13 +142,12 @@ func (ns NullTransactionType) Value() (driver.Value, error) {
 }
 
 type Account struct {
-	ID            uuid.UUID
-	AccountNumber string
 	Balance       int64
 	Type          AccountType
 	FkUserID      uuid.UUID
 	CreatedAt     pgtype.Timestamp
 	UpdatedAt     pgtype.Timestamp
+	AccountNumber uuid.UUID
 }
 
 type CheckingAccount struct {

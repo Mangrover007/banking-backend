@@ -13,7 +13,7 @@ import (
 )
 
 const findAccount = `-- name: FindAccount :one
-SELECT id, account_number, balance, type, fk_user_id, created_at, updated_at FROM accounts
+SELECT balance, type, fk_user_id, created_at, updated_at, account_number FROM accounts
 WHERE
     fk_user_id = $1 AND
     type = $2
@@ -28,45 +28,43 @@ func (q *Queries) FindAccount(ctx context.Context, arg FindAccountParams) (Accou
 	row := q.db.QueryRow(ctx, findAccount, arg.FkUserID, arg.Type)
 	var i Account
 	err := row.Scan(
-		&i.ID,
-		&i.AccountNumber,
 		&i.Balance,
 		&i.Type,
 		&i.FkUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AccountNumber,
 	)
 	return i, err
 }
 
 const findAccountByID = `-- name: FindAccountByID :one
-SELECT id, account_number, balance, type, fk_user_id, created_at, updated_at FROM accounts
-WHERE id = $1
+SELECT balance, type, fk_user_id, created_at, updated_at, account_number FROM accounts
+WHERE account_number = $1
 `
 
-func (q *Queries) FindAccountByID(ctx context.Context, id uuid.UUID) (Account, error) {
-	row := q.db.QueryRow(ctx, findAccountByID, id)
+func (q *Queries) FindAccountByID(ctx context.Context, accountNumber uuid.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, findAccountByID, accountNumber)
 	var i Account
 	err := row.Scan(
-		&i.ID,
-		&i.AccountNumber,
 		&i.Balance,
 		&i.Type,
 		&i.FkUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AccountNumber,
 	)
 	return i, err
 }
 
 const lockTransferAccount = `-- name: LockTransferAccount :execrows
-SELECT id, account_number, balance, type, fk_user_id, created_at, updated_at FROM accounts
-WHERE id = $1
+SELECT balance, type, fk_user_id, created_at, updated_at, account_number FROM accounts
+WHERE account_number = $1
 FOR UPDATE
 `
 
-func (q *Queries) LockTransferAccount(ctx context.Context, id uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, lockTransferAccount, id)
+func (q *Queries) LockTransferAccount(ctx context.Context, accountNumber uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, lockTransferAccount, accountNumber)
 	if err != nil {
 		return 0, err
 	}
@@ -74,39 +72,31 @@ func (q *Queries) LockTransferAccount(ctx context.Context, id uuid.UUID) (int64,
 }
 
 const openAccount = `-- name: OpenAccount :one
-INSERT INTO accounts (account_number, balance, type, fk_user_id)
+INSERT INTO accounts (balance, type, fk_user_id)
 VALUES (
     $1,
     $2,
-    $3,
-    $4
+    $3
 )
-RETURNING id, account_number, balance, type, fk_user_id, created_at, updated_at
+RETURNING balance, type, fk_user_id, created_at, updated_at, account_number
 `
 
 type OpenAccountParams struct {
-	AccountNumber string
-	Balance       int64
-	Type          AccountType
-	FkUserID      uuid.UUID
+	Balance  int64
+	Type     AccountType
+	FkUserID uuid.UUID
 }
 
 func (q *Queries) OpenAccount(ctx context.Context, arg OpenAccountParams) (Account, error) {
-	row := q.db.QueryRow(ctx, openAccount,
-		arg.AccountNumber,
-		arg.Balance,
-		arg.Type,
-		arg.FkUserID,
-	)
+	row := q.db.QueryRow(ctx, openAccount, arg.Balance, arg.Type, arg.FkUserID)
 	var i Account
 	err := row.Scan(
-		&i.ID,
-		&i.AccountNumber,
 		&i.Balance,
 		&i.Type,
 		&i.FkUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AccountNumber,
 	)
 	return i, err
 }
@@ -174,16 +164,16 @@ UPDATE accounts
 SET
     balance = balance + $2,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
+WHERE account_number = $1
 `
 
 type UpdateBalanceDepositParams struct {
-	ID      uuid.UUID
-	Balance int64
+	AccountNumber uuid.UUID
+	Balance       int64
 }
 
 func (q *Queries) UpdateBalanceDeposit(ctx context.Context, arg UpdateBalanceDepositParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateBalanceDeposit, arg.ID, arg.Balance)
+	result, err := q.db.Exec(ctx, updateBalanceDeposit, arg.AccountNumber, arg.Balance)
 	if err != nil {
 		return 0, err
 	}
@@ -195,16 +185,16 @@ UPDATE accounts
 SET
     balance = balance - $2,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND balance >= $2
+WHERE account_number = $1 AND balance >= $2
 `
 
 type UpdateBalanceWithdrawParams struct {
-	ID      uuid.UUID
-	Balance int64
+	AccountNumber uuid.UUID
+	Balance       int64
 }
 
 func (q *Queries) UpdateBalanceWithdraw(ctx context.Context, arg UpdateBalanceWithdrawParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateBalanceWithdraw, arg.ID, arg.Balance)
+	result, err := q.db.Exec(ctx, updateBalanceWithdraw, arg.AccountNumber, arg.Balance)
 	if err != nil {
 		return 0, err
 	}

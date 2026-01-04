@@ -7,6 +7,7 @@ import (
 	"github.com/Mangrover007/banking-backend/internals/repository"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService interface {
@@ -65,7 +66,9 @@ func (s *service) Login(ctx context.Context, phone, email, password string) (uui
 	}
 
 	// is user password correct
-	if password != found.Password {
+	// compare hash
+	err = bcrypt.CompareHashAndPassword([]byte(found.Password), []byte(password))
+	if err != nil {
 		return uuid.UUID{}, ErrInvalidCredentials
 	}
 

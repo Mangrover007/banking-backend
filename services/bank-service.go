@@ -43,7 +43,7 @@ func (b *bank) Deposit(ctx context.Context, account repository.Account, amount i
 	trans, err := b.query.DepositTransaction(ctx, repository.DepositTransactionParams{
 		Status:   repository.TransactionStatusPENDING,
 		Amount:   amount,
-		FkSender: account.ID,
+		FkSender: account.AccountNumber,
 	})
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func (b *bank) Deposit(ctx context.Context, account repository.Account, amount i
 		qtx := b.query.WithTx(tx)
 
 		// attempt deposit
-		rowsAff, err := b.depositWrapper(ctx, qtx, amount, account.ID)
+		rowsAff, err := b.depositWrapper(ctx, qtx, amount, account.AccountNumber)
 		if err != nil {
 			tx.Rollback(ctx) // paranoia rollback
 			return err
@@ -91,7 +91,7 @@ func (b *bank) Withdraw(ctx context.Context, account repository.Account, amount 
 	trans, err := b.query.WithdrawTransaction(ctx, repository.WithdrawTransactionParams{
 		Status:   repository.TransactionStatusPENDING,
 		Amount:   amount,
-		FkSender: account.ID,
+		FkSender: account.AccountNumber,
 	})
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ func (b *bank) Withdraw(ctx context.Context, account repository.Account, amount 
 		qtx := b.query.WithTx(tx)
 
 		// try withdraw
-		rowsAff, err := b.withdrawWrapper(ctx, qtx, amount, account.ID)
+		rowsAff, err := b.withdrawWrapper(ctx, qtx, amount, account.AccountNumber)
 		if err != nil {
 			tx.Rollback(ctx)
 			return err
@@ -135,9 +135,10 @@ func (b *bank) Withdraw(ctx context.Context, account repository.Account, amount 
 func (b *bank) Transfer(ctx context.Context, sender, recipient repository.Account, amount int64) error {
 	// insert transfer transaction record
 	trans, err := b.query.TransferTransaction(ctx, repository.TransferTransactionParams{
-		FkSender:    sender.ID,
-		FkRecipient: pgtype.UUID{Bytes: recipient.ID, Valid: true},
+		FkSender:    sender.AccountNumber,
+		FkRecipient: pgtype.UUID{Bytes: recipient.AccountNumber, Valid: true},
 		Amount:      amount,
+		Status:      repository.TransactionStatusPENDING,
 	})
 	if err != nil {
 		return err
@@ -159,7 +160,7 @@ func (b *bank) Transfer(ctx context.Context, sender, recipient repository.Accoun
 		b.lockAccountsForTransfer(ctx, qtx, sender, recipient)
 
 		// attempt transfer
-		rowsAff, err := b.withdrawWrapper(ctx, qtx, amount, sender.ID)
+		rowsAff, err := b.withdrawWrapper(ctx, qtx, amount, sender.AccountNumber)
 		if err != nil {
 			tx.Rollback(ctx)
 			return err
@@ -169,7 +170,7 @@ func (b *bank) Transfer(ctx context.Context, sender, recipient repository.Accoun
 			return ErrRowsCorruption
 		}
 
-		rowsAff, err = b.depositWrapper(ctx, qtx, amount, recipient.ID)
+		rowsAff, err = b.depositWrapper(ctx, qtx, amount, recipient.AccountNumber)
 		if err != nil {
 			tx.Rollback(ctx)
 			return err
@@ -200,14 +201,18 @@ func (b *bank) OpenSavingsAccount(ctx context.Context, user repository.User, bal
 
 	account, err := qtx.OpenAccount(ctx, repository.OpenAccountParams{
 		Balance:  balance,
-		Type:     repository.AccountTypeCHECKING,
+		Type:     repository.AccountTypeSAVINGS,
 		FkUserID: user.ID,
 	})
+	if err != nil {
+		tx.Rollback(ctx)
+		return repository.Account{}, err
+	}
 
 	var interestRate pgtype.Numeric
 	interestRate.Scan("0.4")
 	_, err = qtx.OpenSavingsAccount(ctx, repository.OpenSavingsAccountParams{
-		AccountID:       account.ID,
+		AccountID:       account.AccountNumber,
 		InterestRate:    interestRate,
 		MinBalance:      25,
 		WithdrawalLimit: 5000,
@@ -229,14 +234,18 @@ func (b *bank) OpenCheckingAccount(ctx context.Context, user repository.User, ba
 
 	account, err := qtx.OpenAccount(ctx, repository.OpenAccountParams{
 		Balance:  balance,
-		Type:     repository.AccountTypeSAVINGS,
+		Type:     repository.AccountTypeCHECKING,
 		FkUserID: user.ID,
 	})
+	if err != nil {
+		tx.Rollback(ctx)
+		return repository.Account{}, err
+	}
 
 	var overdraftLimit pgtype.Numeric
 	overdraftLimit.Scan("0.4")
 	_, err = qtx.OpenCheckingAccount(ctx, repository.OpenCheckingAccountParams{
-		AccountID:      account.ID,
+		AccountID:      account.AccountNumber,
 		OverdraftLimit: overdraftLimit,
 		MaintenanceFee: 12,
 	})
@@ -253,16 +262,16 @@ func Shit() { fmt.Println("eat shit") }
 // HELPER FUNCTIONS
 func (b *bank) depositWrapper(ctx context.Context, qtx *repository.Queries, amount int64, id uuid.UUID) (int64, error) {
 	rowsAff, err := qtx.UpdateBalanceDeposit(ctx, repository.UpdateBalanceDepositParams{
-		ID:      id,
-		Balance: amount,
+		AccountNumber: id,
+		Balance:       amount,
 	})
 	return rowsAff, err
 }
 
 func (b *bank) withdrawWrapper(ctx context.Context, qtx *repository.Queries, amount int64, id uuid.UUID) (int64, error) {
 	rowsAff, err := qtx.UpdateBalanceWithdraw(ctx, repository.UpdateBalanceWithdrawParams{
-		ID:      id,
-		Balance: amount,
+		AccountNumber: id,
+		Balance:       amount,
 	})
 	return rowsAff, err
 }
@@ -276,15 +285,15 @@ func (b *bank) updateTransactionWrapper(ctx context.Context, transID uuid.UUID, 
 }
 
 func (b *bank) lockAccountsForTransfer(ctx context.Context, qtx *repository.Queries, sender, recipient repository.Account) error {
-	if sender.ID.String() > recipient.ID.String() {
-		lock, err := qtx.LockTransferAccount(ctx, sender.ID)
+	if sender.AccountNumber.String() > recipient.AccountNumber.String() {
+		lock, err := qtx.LockTransferAccount(ctx, sender.AccountNumber)
 		if err != nil {
 			return err
 		}
 		if lock != 1 {
 			return ErrRowsCorruption
 		}
-		lock, err = qtx.LockTransferAccount(ctx, recipient.ID)
+		lock, err = qtx.LockTransferAccount(ctx, recipient.AccountNumber)
 		if err != nil {
 			return err
 		}
@@ -292,14 +301,14 @@ func (b *bank) lockAccountsForTransfer(ctx context.Context, qtx *repository.Quer
 			return ErrRowsCorruption
 		}
 	} else {
-		lock, err := qtx.LockTransferAccount(ctx, recipient.ID)
+		lock, err := qtx.LockTransferAccount(ctx, recipient.AccountNumber)
 		if err != nil {
 			return err
 		}
 		if lock != 1 {
 			return ErrRowsCorruption
 		}
-		lock, err = qtx.LockTransferAccount(ctx, sender.ID)
+		lock, err = qtx.LockTransferAccount(ctx, sender.AccountNumber)
 		if err != nil {
 			return err
 		}

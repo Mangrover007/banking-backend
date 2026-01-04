@@ -65,13 +65,12 @@ SET default_table_access_method = heap;
 --
 
 CREATE TABLE public.accounts (
-    id uuid DEFAULT uuidv7() NOT NULL,
-    account_number character(12) NOT NULL,
     balance bigint DEFAULT 0 NOT NULL,
     type public.account_type NOT NULL,
     fk_user_id uuid NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    account_number uuid DEFAULT uuidv7() NOT NULL
 );
 
 
@@ -153,19 +152,11 @@ CREATE TABLE public.users (
 ALTER TABLE public.users OWNER TO postgres;
 
 --
--- Name: accounts accounts_account_number_key; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.accounts
-    ADD CONSTRAINT accounts_account_number_key UNIQUE (account_number);
-
-
---
 -- Name: accounts accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.accounts
-    ADD CONSTRAINT accounts_pkey PRIMARY KEY (id);
+    ADD CONSTRAINT accounts_pkey PRIMARY KEY (account_number);
 
 
 --
@@ -233,19 +224,19 @@ ALTER TABLE ONLY public.accounts
 
 
 --
--- Name: checking_accounts checking_accounts_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: checking_accounts checking_accounts_fk_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.checking_accounts
-    ADD CONSTRAINT checking_accounts_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+    ADD CONSTRAINT checking_accounts_fk_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(account_number);
 
 
 --
--- Name: savings_accounts savings_accounts_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: savings_accounts savings_account_fk_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.savings_accounts
-    ADD CONSTRAINT savings_accounts_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+    ADD CONSTRAINT savings_account_fk_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(account_number);
 
 
 --
@@ -254,22 +245,6 @@ ALTER TABLE ONLY public.savings_accounts
 
 ALTER TABLE ONLY public.sessions
     ADD CONSTRAINT sessions_fk_user_id_fkey FOREIGN KEY (fk_user_id) REFERENCES public.users(id);
-
-
---
--- Name: transactions transactions_fk_recipient_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.transactions
-    ADD CONSTRAINT transactions_fk_recipient_fkey FOREIGN KEY (fk_recipient) REFERENCES public.accounts(id);
-
-
---
--- Name: transactions transactions_fk_sender_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.transactions
-    ADD CONSTRAINT transactions_fk_sender_fkey FOREIGN KEY (fk_sender) REFERENCES public.accounts(id);
 
 
 --
