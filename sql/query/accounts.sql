@@ -55,3 +55,9 @@ SELECT * FROM accounts
 WHERE account_number = $1
 FOR UPDATE ;
 
+-- name: FindAllAccountsByID :many
+SELECT account_number, balance, type FROM
+accounts INNER JOIN users
+ON accounts.fk_user_id = users.id
+WHERE id = $1 ;
+

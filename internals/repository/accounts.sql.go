@@ -57,6 +57,39 @@ func (q *Queries) FindAccountByID(ctx context.Context, accountNumber uuid.UUID) 
 	return i, err
 }
 
+const findAllAccountsByID = `-- name: FindAllAccountsByID :many
+SELECT account_number, balance, type FROM
+accounts INNER JOIN users
+ON accounts.fk_user_id = users.id
+WHERE id = $1
+`
+
+type FindAllAccountsByIDRow struct {
+	AccountNumber uuid.UUID
+	Balance       int64
+	Type          AccountType
+}
+
+func (q *Queries) FindAllAccountsByID(ctx context.Context, id uuid.UUID) ([]FindAllAccountsByIDRow, error) {
+	rows, err := q.db.Query(ctx, findAllAccountsByID, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindAllAccountsByIDRow
+	for rows.Next() {
+		var i FindAllAccountsByIDRow
+		if err := rows.Scan(&i.AccountNumber, &i.Balance, &i.Type); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockTransferAccount = `-- name: LockTransferAccount :execrows
 SELECT balance, type, fk_user_id, created_at, updated_at, account_number FROM accounts
 WHERE account_number = $1
