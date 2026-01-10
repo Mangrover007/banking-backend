@@ -10,17 +10,9 @@ services:
 
   bank-backend:
     image: bank
-    command: sh -c "go mod tidy && go build -o bin/ cmd/main.go && ./bin/main"
-    working_dir: /app
     depends_on: [bank-db]
-    environment:
-      DB_USER: postgres
-      DB_PASSWORD: pass
-      DB_HOST: bank-db 
     ports:
       - "127.0.0.1:8080:8080"
-    volumes:
-      - ./:/app
   
 volumes:
   bank-db-data:
